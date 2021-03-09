@@ -1,0 +1,1 @@
+The classic game of mastermind. Play against the computer as either the code maker of the code breaker!
