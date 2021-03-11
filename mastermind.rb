@@ -18,11 +18,6 @@ class CodeItem
   def initialize(number)
     @number = number
     @color_code = get_color_code(number)
-    @clue = CodeClue.new
-  end
-
-  def display_item
-    @number.colorize(@color_code)
   end
 
   private
@@ -33,18 +28,29 @@ class CodeItem
   end
 end
 
-class CodeClue
+# Stores the clues associated with a particular guess
+class CodeClues
+  attr_reader :clues
+
+  def initialize
+    @clues = []
+  end
+
+  def add_clue(state)
+    @clues.push(state)
+    p @clues
+  end
 end
 
 # The class for displaying the gameboard
 class GameBoard
-  def draw_board(guesses, max_guesses)
+  def draw_board(all_guesses, max_guesses, all_clues)
     draw_header
     puts '|====================================================|'
 
-    draw_guesses(guesses)
+    draw_guesses(all_guesses, all_clues)
 
-    draw_blank(max_guesses, guesses.length)
+    draw_blank(max_guesses, all_guesses.length)
 
     puts '|====================================================|'
   end
@@ -54,6 +60,19 @@ class GameBoard
     print ''
   end
 
+  def display_clues(guess_clues)
+    guess_clues.reduce('') do |clues_string, state|
+      case state
+      when 1
+        clues_string + "\u2022".encode('UTF-8').colorize(31)
+      when 0
+        clues_string + "\u2022".encode('UTF-8')
+      when -1
+        clues_string
+      end
+    end
+  end
+
   private
 
   def draw_header
@@ -61,14 +80,22 @@ class GameBoard
     puts '| Turn ||           Guesses             ||   Clues   |'
   end
 
-  def draw_guesses(guesses)
-    guesses.each do |guess_number, guess|
+  def draw_guesses(all_guesses, all_clues)
+    all_guesses.each do |guess_number, guess|
+      output_clues = display_clues(all_clues[guess_number].clues)
+      add_on_spaces = spaces(all_clues, guess_number)
       print "|  #{guess_number}#{Integer(guess_number) < 10 ? ' ' : ''}  |"
       print display_code(guess)
-      print '||           |'
+      print "||   #{output_clues}#{add_on_spaces}    |"
       puts ''
       puts '|----------------------------------------------------|'
     end
+  end
+
+  def spaces(all_clues, guess_number)
+    space = ''
+    (4 - all_clues[guess_number].clues.reject { |item| item == -1 }.length).times { space += ' ' }
+    space
   end
 
   def draw_blank(max_guesses, number_of_guesses)
@@ -85,15 +112,12 @@ end
 class Game
   def initialize(game_mode)
     @guess_number = '1'
-    @guesses = {}
+    @all_guesses = {}
+    @all_clues = {}
     @max_guesses = 12
     @solved = false
     @gameboard = GameBoard.new
-    if game_mode == '1'
-      start_breaker
-    else
-      start_maker
-    end
+    game_mode == '1' ? start_breaker : start_maker
   end
 
   private
@@ -108,7 +132,7 @@ class Game
 
     @gameboard.display_code(@secret_code)
 
-    request_guess until @solved || @guess_number == @max_guesses
+    request_guess until @solved || Integer(@guess_number) == (@max_guesses + 1)
   end
 
   def start_maker
@@ -123,10 +147,13 @@ class Game
     end
 
     @secret_string = @secret_code.reduce('') { |str, item| str + item.number.to_s }
+    @secret_array = @secret_string.split('')
   end
 
   def log_guess(guess)
-    @guesses[@guess_number] = codify(guess)
+    @all_guesses[@guess_number] = codify(guess)
+    @all_clues[@guess_number] = analyse_guess(guess.split(''), CodeClues.new)
+
     @guess_number = (@guess_number.to_i + 1).to_s
     @solved = guess == @secret_string
   end
@@ -149,7 +176,7 @@ class Game
       request_guess
     end
 
-    @gameboard.draw_board(@guesses, @max_guesses)
+    @gameboard.draw_board(@all_guesses, @max_guesses, @all_clues)
   end
 
   def valid_guess?(guess)
@@ -158,6 +185,20 @@ class Game
     return unless guess_array.length == 4
 
     guess_array.all? { |num| num.integer? && Integer(num) >= 1 && Integer(num) <= 6 }
+  end
+
+  def analyse_guess(guess_array, guess_clues)
+    guess_array.each_with_index do |num, i|
+      if num == @secret_array[i]
+        guess_clues.add_clue(1)
+      elsif @secret_array.any?(num)
+        guess_clues.add_clue(0)
+      else
+        guess_clues.add_clue(-1)
+      end
+    end
+
+    guess_clues
   end
 end
 
