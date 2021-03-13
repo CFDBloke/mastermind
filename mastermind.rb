@@ -1,7 +1,5 @@
 # frozen_string_literal: false
 
-require 'pry'
-
 # The class for the actions made by the computer player
 class ComputerPlayer
   def initialize
